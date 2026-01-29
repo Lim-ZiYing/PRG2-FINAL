@@ -9,15 +9,33 @@ public class Order
     public DateTime DeliveryDateTime { get; set; }
     public string DeliveryAddress { get; set; } = "";
 
-    public DateTime CreatedDateTime { get; set; }
-    public double TotalAmount { get; set; }
-    public string Status { get; set; } = "";
+    public DateTime CreatedDateTime { get; set; } = DateTime.Now;
+
+    public string PaymentMethod { get; set; } = ""; // CC / PP / CD
+    public string Status { get; set; } = "Pending"; // Pending/Preparing/Delivered/Rejected/Cancelled etc
+
+    public string? SpecialRequest { get; set; } // only one allowed
 
     private readonly List<OrderedFoodItem> _items = new();
     public IReadOnlyList<OrderedFoodItem> Items => _items;
 
+    public double TotalAmount { get; set; } // include delivery fee
+
+    public void ClearItems() => _items.Clear();
     public void AddItem(OrderedFoodItem item) => _items.Add(item);
 
-    public override string ToString()
-        => $"{OrderId} {CustomerEmail} {RestaurantId} {DeliveryDateTime:dd/MM/yyyy HH:mm} ${TotalAmount:0.00} {Status}";
+    public double CalculateTotal()
+    {
+        double itemsTotal = _items.Sum(i => i.LineTotal());
+        TotalAmount = itemsTotal + 5.00; // fixed delivery fee
+        return TotalAmount;
+    }
+
+    public void DisplayItems()
+    {
+        for (int i = 0; i < _items.Count; i++)
+            Console.WriteLine($"{i + 1}. {_items[i]}");
+        if (!string.IsNullOrWhiteSpace(SpecialRequest))
+            Console.WriteLine($"Special request: {SpecialRequest}");
+    }
 }

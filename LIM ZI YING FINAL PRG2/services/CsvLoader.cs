@@ -201,5 +201,50 @@ public static class CsvLoader
         result.Add(current.ToString());
         return result;
     }
+    public static void SaveQueueToCsv(string path, List<Restaurant> restaurants)
+    {
+        using var sw = new StreamWriter(path, false);
+        sw.WriteLine("RestaurantId,OrderId,CustomerEmail,DeliveryDateTime,TotalAmount,Status");
+
+        foreach (var r in restaurants)
+        {
+            foreach (var o in r.OrderQueue)
+            {
+                sw.WriteLine($"{r.RestaurantId},{o.OrderId},{o.CustomerEmail},{o.DeliveryDateTime:dd/MM/yyyy HH:mm},{o.TotalAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)},{o.Status}");
+            }
+        }
+    }
+
+    public static void SaveRefundStackToCsv(string path, Stack<Order> refundStack)
+    {
+        using var sw = new StreamWriter(path, false);
+        sw.WriteLine("OrderId,CustomerEmail,RestaurantId,DeliveryDateTime,TotalAmount,Status");
+
+        foreach (var o in refundStack)
+        {
+            sw.WriteLine($"{o.OrderId},{o.CustomerEmail},{o.RestaurantId},{o.DeliveryDateTime:dd/MM/yyyy HH:mm},{o.TotalAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)},{o.Status}");
+        }
+    }
+
+    public static void RewriteOrdersCsv(string path, List<Order> orders)
+    {
+        using var sw = new StreamWriter(path, false);
+        sw.WriteLine("OrderId,CustomerEmail,RestaurantId,DeliveryDate,DeliveryTime,DeliveryAddress,CreatedDateTime,TotalAmount,Status,Items");
+
+        foreach (var o in orders.OrderBy(x => x.OrderId))
+        {
+            string deliveryDate = o.DeliveryDateTime.ToString("dd/MM/yyyy");
+            string deliveryTime = o.DeliveryDateTime.ToString("HH:mm");
+            string created = o.CreatedDateTime.ToString("dd/MM/yyyy HH:mm");
+            string amount = o.TotalAmount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            // Items format: ItemName,qty|ItemName,qty
+            string items = string.Join("|", o.Items.Select(i => $"{i.FoodItem.ItemName},{i.Quantity}"));
+
+            // Put items in quotes because item names include commas in our CSV format
+            sw.WriteLine($"{o.OrderId},{o.CustomerEmail},{o.RestaurantId},{deliveryDate},{deliveryTime},{o.DeliveryAddress},{created},{amount},{o.Status},\"{items}\"");
+        }
+    }
+
 
 }
