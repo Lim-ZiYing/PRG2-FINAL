@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Globalization;
 using LIM_ZI_YING_FINAL_PRG2.models;
 using LIM_ZI_YING_FINAL_PRG2.services;
 
@@ -11,7 +12,7 @@ class Program
     static List<Restaurant> restaurants = new();
     static List<Customer> customers = new();
     static List<Order> orders = new();
-    static Stack<Order> refundStack = new(); // for Cancelled/Rejected refunds
+    static Stack<Order> refundStack = new(); // Cancelled/Rejected refunds
 
     // Paths
     static string baseDataPath = "";
@@ -30,7 +31,7 @@ class Program
         orders = CsvLoader.LoadOrders(ordersCsvPath, restaurants, customers);
 
         // Attach orders to customers
-        var custMap = customers.ToDictionary(c => c.Email, c => c);
+        var custMap = customers.ToDictionary(c => c.Email, c => c, StringComparer.OrdinalIgnoreCase);
         foreach (var o in orders)
             if (custMap.TryGetValue(o.CustomerEmail, out var c)) c.AddOrder(o);
 
@@ -71,15 +72,23 @@ class Program
                 case 7:
                     ViewRefundStack();
                     break;
+
+                // Advanced (a)
                 case 8:
-                    ShowSummaryReport();
+                    BulkProcessPendingOrdersForCurrentDay();
+                    break;
+
+                // Advanced (b)
+                case 9:
+                    AdvancedReport_OrderAmountRefundsEarnings();
                     break;
 
                 case 0:
                     ExitAndSave();
                     return;
+
                 default:
-                    Console.WriteLine("Invalid choice. Please enter 0 to 6.");
+                    Console.WriteLine("Invalid choice. Please enter 0 to 9.");
                     break;
             }
 
@@ -99,7 +108,8 @@ class Program
         Console.WriteLine("5. Modify an existing order");
         Console.WriteLine("6. Delete an existing order");
         Console.WriteLine("7. View refund stack (latest first)");
-        Console.WriteLine("8. Summary report (Advanced)");
+        Console.WriteLine("8. Advanced (a) Bulk process Pending orders for current day");
+        Console.WriteLine("9. Advanced (b) Display total order amount / refunds / earnings");
         Console.WriteLine("0. Exit");
     }
 
@@ -146,14 +156,19 @@ class Program
             string t = ReadNonEmpty("Enter Delivery Time (hh:mm): ");
 
             if (DateTime.TryParseExact($"{d} {t}", "dd/MM/yyyy HH:mm",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
                 out DateTime dt))
+            {
                 return dt;
+            }
+
 
             Console.WriteLine("Invalid date/time format. Try again.");
         }
     }
+
+    
 
     // ---------------- FIND HELPERS ----------------
 
@@ -192,8 +207,8 @@ class Program
 
         foreach (var o in orders.OrderBy(x => x.OrderId))
         {
-            string custName = customers.FirstOrDefault(c => c.Email == o.CustomerEmail)?.Name ?? o.CustomerEmail;
-            string restName = restaurants.FirstOrDefault(r => r.RestaurantId == o.RestaurantId)?.RestaurantName ?? o.RestaurantId;
+            string custName = customers.FirstOrDefault(c => c.Email.Equals(o.CustomerEmail, StringComparison.OrdinalIgnoreCase))?.Name ?? o.CustomerEmail;
+            string restName = restaurants.FirstOrDefault(r => r.RestaurantId.Equals(o.RestaurantId, StringComparison.OrdinalIgnoreCase))?.RestaurantName ?? o.RestaurantId;
             string delivery = o.DeliveryDateTime.ToString("dd/MM/yyyy HH:mm");
 
             Console.WriteLine($"{o.OrderId,-8}  {custName,-17}  {restName,-16}  {delivery,-20}  ${o.TotalAmount,7:0.00}  {o.Status}");
@@ -285,7 +300,7 @@ class Program
         if (sr == "Y")
             newOrder.SpecialRequest = ReadNonEmpty("Enter special request: ");
 
-        // ----- totals (with optional special offer) -----
+        // ----- totals  -----
         double itemsTotal = newOrder.Items.Sum(i => i.LineTotal());
         double discountAmount = 0.0;
 
@@ -299,9 +314,15 @@ class Program
             if (useOffer == "Y")
             {
                 string code = ReadNonEmpty("Enter offer code: ").ToUpper();
-                var offer = rest.SpecialOffers.FirstOrDefault(x => x.OfferCode.Equals(code, StringComparison.OrdinalIgnoreCase));
+
+                var offer = rest.SpecialOffers
+                    .FirstOrDefault(x => x.OfferCode.Equals(code, StringComparison.OrdinalIgnoreCase));
+
                 if (offer != null)
                 {
+                    newOrder.AppliedOfferCode = offer.OfferCode;
+                    newOrder.DiscountPercent = offer.Discount;
+
                     discountAmount = itemsTotal * (offer.Discount / 100.0);
                     Console.WriteLine($"Offer applied: -${discountAmount:0.00}");
                 }
@@ -312,6 +333,7 @@ class Program
             }
         }
 
+
         double deliveryFee = 5.00;
         double finalTotal = (itemsTotal - discountAmount) + deliveryFee;
 
@@ -321,7 +343,6 @@ class Program
         Console.WriteLine($"Discount:   -${discountAmount:0.00}");
         Console.WriteLine($"Delivery:   +${deliveryFee:0.00}");
         Console.WriteLine($"Final total: ${newOrder.TotalAmount:0.00}");
-
 
         string pay = ReadYesNo("Proceed to payment? [Y/N]: ");
         if (pay == "N")
@@ -351,7 +372,7 @@ class Program
         Console.WriteLine($"Order {newOrder.OrderId} created successfully! Status: {newOrder.Status}");
     }
 
-    // ---------------- FEATURE 4: PROCESS ----------------
+    //  FEATURE 4: PROCESS  
 
     static void ProcessOrder()
     {
@@ -372,11 +393,10 @@ class Program
             return;
         }
 
-        // Process ONE order at the front (simpler + matches typical queue behavior)
         var o = rest.OrderQueue.Peek();
 
         Console.WriteLine($"Order {o.OrderId}:");
-        Console.WriteLine($"Customer: {customers.FirstOrDefault(c => c.Email == o.CustomerEmail)?.Name ?? o.CustomerEmail}");
+        Console.WriteLine($"Customer: {customers.FirstOrDefault(c => c.Email.Equals(o.CustomerEmail, StringComparison.OrdinalIgnoreCase))?.Name ?? o.CustomerEmail}");
         Console.WriteLine("Ordered Items:");
         o.DisplayItems();
         Console.WriteLine($"Delivery date/time: {o.DeliveryDateTime:dd/MM/yyyy HH:mm}");
@@ -416,7 +436,6 @@ class Program
         }
         else if (action == "X")
         {
-            // do nothing, keep order in queue
             Console.WriteLine("No action taken (kept in queue).");
         }
         else
@@ -424,7 +443,6 @@ class Program
             Console.WriteLine("Invalid action.");
         }
 
-        // If delivered or rejected, remove from queue front
         if (o.Status == "Delivered" || o.Status == "Rejected")
         {
             rest.OrderQueue.Dequeue();
@@ -433,7 +451,7 @@ class Program
         CsvLoader.RewriteOrdersCsv(ordersCsvPath, orders);
     }
 
-    // ---------------- FEATURE 5: MODIFY ----------------
+    // FEATURE 5: MODIFY 
 
     static void ModifyOrder()
     {
@@ -448,7 +466,9 @@ class Program
             return;
         }
 
-        var pending = cust.Orders.Where(o => o.Status == "Pending").OrderBy(o => o.OrderId).ToList();
+        var pending = cust.Orders.Where(o => o.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                                 .OrderBy(o => o.OrderId)
+                                 .ToList();
         if (pending.Count == 0)
         {
             Console.WriteLine("No Pending orders for this customer.");
@@ -554,8 +574,8 @@ class Program
                 string? t = Console.ReadLine()?.Trim();
 
                 if (DateTime.TryParseExact(t, "HH:mm",
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
                     out DateTime timeOnly))
                 {
                     order.DeliveryDateTime = new DateTime(
@@ -582,7 +602,7 @@ class Program
         CsvLoader.RewriteOrdersCsv(ordersCsvPath, orders);
     }
 
-    // ---------------- FEATURE 6: DELETE/CANCEL ----------------
+    //FEATURE 6: DELETE/CANCEL 
 
     static void DeleteOrder()
     {
@@ -597,7 +617,9 @@ class Program
             return;
         }
 
-        var pending = cust.Orders.Where(o => o.Status == "Pending").OrderBy(o => o.OrderId).ToList();
+        var pending = cust.Orders.Where(o => o.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                                 .OrderBy(o => o.OrderId)
+                                 .ToList();
         if (pending.Count == 0)
         {
             Console.WriteLine("No Pending orders for this customer.");
@@ -632,11 +654,27 @@ class Program
 
         order.Status = "Cancelled";
         refundStack.Push(order);
+        // Remove cancelled order from restaurant queue as well
+        var rest = GetRestaurantById(order.RestaurantId);
+        if (rest != null)
+        {
+            int n = rest.OrderQueue.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var q = rest.OrderQueue.Dequeue();
+                if (q.OrderId != order.OrderId)
+                    rest.OrderQueue.Enqueue(q);
+            }
+        }
+
 
         CsvLoader.RewriteOrdersCsv(ordersCsvPath, orders);
 
         Console.WriteLine($"Order {order.OrderId} cancelled. Refund of ${order.TotalAmount:0.00} processed.");
     }
+
+    // EXTRA: VIEW REFUND STACK
+
     static void ViewRefundStack()
     {
         Console.WriteLine("Refund Stack (Latest First)");
@@ -655,80 +693,159 @@ class Program
             i++;
         }
     }
-    static void ShowSummaryReport()
+
+    // ADVANCED (a): BULK PROCESS PENDING FOR CURRENT DAY 
+    // - identify all orders with status "Pending" (in order queues) for current day
+    // - show total number in order queues with this status
+    // - for each such order:
+    //      if delivery time < 1 hour => Rejected
+    //      else => Preparing
+    // - show summary stats (processed, Preparing vs Rejected, % auto processed vs all queue orders)
+    static void BulkProcessPendingOrdersForCurrentDay()
     {
-        Console.WriteLine("Summary Report (Advanced)");
-        Console.WriteLine("=========================");
+        Console.WriteLine("Advanced (a): Bulk process Pending orders for current day");
+        Console.WriteLine("=========================================================");
 
-        Console.WriteLine($"Total orders: {orders.Count}");
+        DateTime now = DateTime.Now;
+        DateTime today = now.Date;
 
-        var byStatus = orders
-            .GroupBy(o => o.Status)
-            .OrderByDescending(g => g.Count());
+        int totalInAllQueues = restaurants.Sum(r => r.OrderQueue.Count);
 
-        Console.WriteLine("\nOrders by Status:");
-        foreach (var g in byStatus)
-            Console.WriteLine($"- {g.Key}: {g.Count()}");
-
-        double deliveredRevenue = orders
-            .Where(o => o.Status.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
-            .Sum(o => o.TotalAmount);
-
-        double refundedTotal = refundStack.Sum(o => o.TotalAmount);
-
-        Console.WriteLine($"\nDelivered revenue: ${deliveredRevenue:0.00}");
-        Console.WriteLine($"Refund stack total: ${refundedTotal:0.00}");
-
-        // Top 3 restaurants by delivered revenue
-        var topRestaurants = orders
-            .Where(o => o.Status.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
-            .GroupBy(o => o.RestaurantId)
-            .Select(g => new
-            {
-                RestaurantId = g.Key,
-                Revenue = g.Sum(x => x.TotalAmount)
-            })
-            .OrderByDescending(x => x.Revenue)
-            .Take(3)
-            .ToList();
-
-        Console.WriteLine("\nTop 3 Restaurants (Delivered Revenue):");
-        if (topRestaurants.Count == 0)
+        // count pending orders in queues for today
+        int pendingTodayCount = 0;
+        foreach (var r in restaurants)
         {
-            Console.WriteLine("- (none)");
-        }
-        else
-        {
-            foreach (var r in topRestaurants)
+            foreach (var o in r.OrderQueue)
             {
-                string name = restaurants.FirstOrDefault(x => x.RestaurantId == r.RestaurantId)?.RestaurantName ?? r.RestaurantId;
-                Console.WriteLine($"- {name} ({r.RestaurantId}): ${r.Revenue:0.00}");
+                if (o.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase) &&
+                    o.DeliveryDateTime.Date == today)
+                {
+                    pendingTodayCount++;
+                }
             }
         }
 
-        // Most ordered items (by quantity)
-        var topItems = orders
-            .SelectMany(o => o.Items)
-            .GroupBy(i => i.FoodItem.ItemName)
-            .Select(g => new { ItemName = g.Key, Qty = g.Sum(x => x.Quantity) })
-            .OrderByDescending(x => x.Qty)
-            .Take(5)
-            .ToList();
+        Console.WriteLine($"Today: {today:dd/MM/yyyy}");
+        Console.WriteLine($"Total orders in ALL queues: {totalInAllQueues}");
+        Console.WriteLine($"Total PENDING orders in queues for today: {pendingTodayCount}");
+        Console.WriteLine();
 
-        Console.WriteLine("\nTop 5 Items (Total Qty):");
-        if (topItems.Count == 0)
+        if (pendingTodayCount == 0)
         {
-            Console.WriteLine("- (none)");
+            Console.WriteLine("No Pending orders for today to process.");
+            return;
         }
-        else
+
+        int processed = 0;
+        int preparing = 0;
+        int rejected = 0;
+
+        foreach (var r in restaurants)
         {
-            foreach (var it in topItems)
-                Console.WriteLine($"- {it.ItemName}: {it.Qty}");
+            int n = r.OrderQueue.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var o = r.OrderQueue.Dequeue();
+
+                bool isPendingToday =
+                    o.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase) &&
+                    o.DeliveryDateTime.Date == today;
+
+                if (!isPendingToday)
+                {
+                    // keep unchanged
+                    r.OrderQueue.Enqueue(o);
+                    continue;
+                }
+
+                processed++;
+
+                TimeSpan diff = o.DeliveryDateTime - now;
+
+                if (diff.TotalMinutes < 60)
+                {
+                    o.Status = "Rejected";
+                    refundStack.Push(o);
+                    rejected++;
+                    // do NOT enqueue back (rejected removed from queue)
+                }
+                else
+                {
+                    o.Status = "Preparing";
+                    preparing++;
+                    // keep in queue
+                    r.OrderQueue.Enqueue(o);
+                }
+            }
         }
+
+        double percent = (totalInAllQueues == 0) ? 0.0 : (processed * 100.0 / totalInAllQueues);
+
+        Console.WriteLine("Summary Statistics");
+        Console.WriteLine("------------------");
+        Console.WriteLine($"Orders processed (auto): {processed}");
+        Console.WriteLine($"Preparing: {preparing}");
+        Console.WriteLine($"Rejected:  {rejected}");
+        Console.WriteLine($"% auto processed vs ALL queued orders: {percent:0.00}%");
+
+        // persist
+        CsvLoader.RewriteOrdersCsv(ordersCsvPath, orders);
     }
 
+    // ADVANCED (b): DISPLAY TOTAL ORDER AMOUNT / REFUNDS / EARNINGS 
+    // Requirement:
+    // For each restaurant:
+    //  - delivered orders total (LESS delivery fee per order)
+    //  - refunded orders total
+    // After all restaurants:
+    //  - total order amount
+    //  - total refunds
+    //  - final amount Gruberoo earns
+    static void AdvancedReport_OrderAmountRefundsEarnings()
+    {
+        Console.WriteLine("Advanced (b): Display total order amount / refunds / earnings");
+        Console.WriteLine("=============================================================");
 
-    // ---------------- EXIT SAVE ----------------
+        const double deliveryFee = 5.00;
+
+        double grandOrderAmount = 0.0; // delivered totals LESS delivery fee per order
+        double grandRefunds = 0.0;
+        int deliveredCount = 0;
+
+        foreach (var r in restaurants)
+        {
+            var delivered = orders.Where(o =>
+                o.RestaurantId.Equals(r.RestaurantId, StringComparison.OrdinalIgnoreCase) &&
+                o.Status.Equals("Delivered", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var refunded = orders.Where(o =>
+                o.RestaurantId.Equals(r.RestaurantId, StringComparison.OrdinalIgnoreCase) &&
+                (o.Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) ||
+                 o.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase))).ToList();
+
+            deliveredCount += delivered.Count;
+
+            double deliveredLessFee = delivered.Sum(o => o.TotalAmount - deliveryFee);
+            double refundsTotal = refunded.Sum(o => o.TotalAmount);
+
+            grandOrderAmount += deliveredLessFee;
+            grandRefunds += refundsTotal;
+
+            Console.WriteLine($"\nRestaurant: {r.RestaurantName} ({r.RestaurantId})");
+            Console.WriteLine($"Delivered order amount (less delivery fee): ${deliveredLessFee:0.00}");
+            Console.WriteLine($"Total refunds: ${refundsTotal:0.00}");
+        }
+
+        double gruberooEarns = deliveredCount * deliveryFee;
+
+        Console.WriteLine("\nOverall Totals");
+        Console.WriteLine("--------------");
+        Console.WriteLine($"Total order amount : ${grandOrderAmount:0.00}");
+        Console.WriteLine($"Total refunds      : ${grandRefunds:0.00}");
+        Console.WriteLine($"Final Gruberoo earns: ${gruberooEarns:0.00}");
+    }
+
+    // EXIT SAVE 
 
     static void ExitAndSave()
     {

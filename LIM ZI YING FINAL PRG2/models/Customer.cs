@@ -16,5 +16,6 @@ public class Customer
 
     public void AddOrder(Order o) => _orders.Add(o);
 
-    public override string ToString() => $"{Name} ({Email})";
+    public override string ToString()
+        => $"{Name} ({Email})";
 }

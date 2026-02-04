@@ -12,7 +12,6 @@ public class Restaurant
     private readonly List<SpecialOffer> _specialOffers = new();
     public IReadOnlyList<SpecialOffer> SpecialOffers => _specialOffers;
 
-    
     public Queue<Order> OrderQueue { get; } = new();
 
     public Restaurant(string id, string name, string email)

@@ -10,7 +10,7 @@ namespace LIM_ZI_YING_FINAL_PRG2.services;
 
 public static class CsvLoader
 {
-    // -------------------- LOAD RESTAURANTS --------------------
+    // LOAD RESTAURANTS 
     public static List<Restaurant> LoadRestaurants(string path)
     {
         var list = new List<Restaurant>();
@@ -33,7 +33,7 @@ public static class CsvLoader
         return list;
     }
 
-    // -------------------- LOAD FOOD ITEMS --------------------
+    //  LOAD FOOD ITEMS 
     public static void LoadFoodItems(string path, List<Restaurant> restaurants)
     {
         var lines = File.ReadAllLines(path);
@@ -65,7 +65,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- LOAD CUSTOMERS --------------------
+    // LOAD CUSTOMERS 
     public static List<Customer> LoadCustomers(string path)
     {
         var list = new List<Customer>();
@@ -87,7 +87,7 @@ public static class CsvLoader
         return list;
     }
 
-    // -------------------- LOAD SPECIAL OFFERS --------------------
+    // LOAD SPECIAL OFFERS 
     // Expected CSV format:
     // OfferCode,OfferDesc,Discount,RestaurantId
     public static void LoadSpecialOffers(string filePath, List<Restaurant> restaurants)
@@ -120,7 +120,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- LOAD ORDERS --------------------
+    // LOAD ORDERS 
     public static List<Order> LoadOrders(string path, List<Restaurant> restaurants, List<Customer> customers)
     {
         var loadedOrders = new List<Order>();
@@ -177,14 +177,14 @@ public static class CsvLoader
             // Add to list
             loadedOrders.Add(order);
 
-            // (optional) only ensure exists, don't crash
+            // ensure exists, don't crash
             _ = customerMap.ContainsKey(customerEmail);
         }
 
         return loadedOrders;
     }
 
-    // -------------------- PARSE ITEMS --------------------
+    // PARSE ITEMS 
     private static void ParseItemsIntoOrder(Order order, Restaurant restaurant, string itemsStr)
     {
         if (string.IsNullOrWhiteSpace(itemsStr)) return;
@@ -211,7 +211,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- SAVE QUEUE --------------------
+    // SAVE QUEUE 
     public static void SaveQueueToCsv(string path, List<Restaurant> restaurants)
     {
         using var sw = new StreamWriter(path, false);
@@ -226,7 +226,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- SAVE REFUND STACK --------------------
+    //  SAVE REFUND STACK
     public static void SaveRefundStackToCsv(string path, Stack<Order> refundStack)
     {
         using var sw = new StreamWriter(path, false);
@@ -238,7 +238,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- REWRITE ORDERS.CSV --------------------
+    //  REWRITE ORDERS.CSV 
     public static void RewriteOrdersCsv(string path, List<Order> orders)
     {
         using var sw = new StreamWriter(path, false);
@@ -257,7 +257,7 @@ public static class CsvLoader
         }
     }
 
-    // -------------------- SAFE CSV SPLIT (handles quotes) --------------------
+    //  SAFE CSV SPLIT (handles quotes) 
     private static List<string> SplitCsvLine(string line)
     {
         var result = new List<string>();

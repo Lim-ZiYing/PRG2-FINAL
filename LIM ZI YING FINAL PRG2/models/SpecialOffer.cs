@@ -13,5 +13,6 @@ public class SpecialOffer
         Discount = discount;
     }
 
-    public override string ToString() => $"{OfferCode}: {OfferDesc} ({Discount:0.#}%)";
+    public override string ToString()
+        => $"{OfferCode}: {OfferDesc} ({Discount:0.#}%)";
 }
