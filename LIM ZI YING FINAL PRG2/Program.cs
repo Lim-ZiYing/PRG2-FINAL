@@ -68,6 +68,13 @@ class Program
                 case 6:
                     DeleteOrder();
                     break;
+                case 7:
+                    ViewRefundStack();
+                    break;
+                case 8:
+                    ShowSummaryReport();
+                    break;
+
                 case 0:
                     ExitAndSave();
                     return;
@@ -91,6 +98,8 @@ class Program
         Console.WriteLine("4. Process an order");
         Console.WriteLine("5. Modify an existing order");
         Console.WriteLine("6. Delete an existing order");
+        Console.WriteLine("7. View refund stack (latest first)");
+        Console.WriteLine("8. Summary report (Advanced)");
         Console.WriteLine("0. Exit");
     }
 
@@ -276,8 +285,43 @@ class Program
         if (sr == "Y")
             newOrder.SpecialRequest = ReadNonEmpty("Enter special request: ");
 
-        double total = newOrder.CalculateTotal();
-        Console.WriteLine($"Order Total: ${(total - 5.00):0.00} + $5.00 (delivery) = ${total:0.00}");
+        // ----- totals (with optional special offer) -----
+        double itemsTotal = newOrder.Items.Sum(i => i.LineTotal());
+        double discountAmount = 0.0;
+
+        if (rest.SpecialOffers.Count > 0)
+        {
+            Console.WriteLine("Available Special Offers:");
+            foreach (var so in rest.SpecialOffers)
+                Console.WriteLine($"- {so.OfferCode}: {so.OfferDesc} ({so.Discount:0.#}%)");
+
+            string useOffer = ReadYesNo("Apply a special offer? [Y/N]: ");
+            if (useOffer == "Y")
+            {
+                string code = ReadNonEmpty("Enter offer code: ").ToUpper();
+                var offer = rest.SpecialOffers.FirstOrDefault(x => x.OfferCode.Equals(code, StringComparison.OrdinalIgnoreCase));
+                if (offer != null)
+                {
+                    discountAmount = itemsTotal * (offer.Discount / 100.0);
+                    Console.WriteLine($"Offer applied: -${discountAmount:0.00}");
+                }
+                else
+                {
+                    Console.WriteLine("Invalid offer code. No offer applied.");
+                }
+            }
+        }
+
+        double deliveryFee = 5.00;
+        double finalTotal = (itemsTotal - discountAmount) + deliveryFee;
+
+        newOrder.TotalAmount = Math.Round(finalTotal, 2);
+
+        Console.WriteLine($"Items total: ${itemsTotal:0.00}");
+        Console.WriteLine($"Discount:   -${discountAmount:0.00}");
+        Console.WriteLine($"Delivery:   +${deliveryFee:0.00}");
+        Console.WriteLine($"Final total: ${newOrder.TotalAmount:0.00}");
+
 
         string pay = ReadYesNo("Proceed to payment? [Y/N]: ");
         if (pay == "N")
@@ -593,6 +637,96 @@ class Program
 
         Console.WriteLine($"Order {order.OrderId} cancelled. Refund of ${order.TotalAmount:0.00} processed.");
     }
+    static void ViewRefundStack()
+    {
+        Console.WriteLine("Refund Stack (Latest First)");
+        Console.WriteLine("===========================");
+
+        if (refundStack.Count == 0)
+        {
+            Console.WriteLine("Refund stack is empty.");
+            return;
+        }
+
+        int i = 1;
+        foreach (var o in refundStack)
+        {
+            Console.WriteLine($"{i}. Order {o.OrderId} | {o.CustomerEmail} | {o.RestaurantId} | ${o.TotalAmount:0.00} | {o.Status}");
+            i++;
+        }
+    }
+    static void ShowSummaryReport()
+    {
+        Console.WriteLine("Summary Report (Advanced)");
+        Console.WriteLine("=========================");
+
+        Console.WriteLine($"Total orders: {orders.Count}");
+
+        var byStatus = orders
+            .GroupBy(o => o.Status)
+            .OrderByDescending(g => g.Count());
+
+        Console.WriteLine("\nOrders by Status:");
+        foreach (var g in byStatus)
+            Console.WriteLine($"- {g.Key}: {g.Count()}");
+
+        double deliveredRevenue = orders
+            .Where(o => o.Status.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
+            .Sum(o => o.TotalAmount);
+
+        double refundedTotal = refundStack.Sum(o => o.TotalAmount);
+
+        Console.WriteLine($"\nDelivered revenue: ${deliveredRevenue:0.00}");
+        Console.WriteLine($"Refund stack total: ${refundedTotal:0.00}");
+
+        // Top 3 restaurants by delivered revenue
+        var topRestaurants = orders
+            .Where(o => o.Status.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(o => o.RestaurantId)
+            .Select(g => new
+            {
+                RestaurantId = g.Key,
+                Revenue = g.Sum(x => x.TotalAmount)
+            })
+            .OrderByDescending(x => x.Revenue)
+            .Take(3)
+            .ToList();
+
+        Console.WriteLine("\nTop 3 Restaurants (Delivered Revenue):");
+        if (topRestaurants.Count == 0)
+        {
+            Console.WriteLine("- (none)");
+        }
+        else
+        {
+            foreach (var r in topRestaurants)
+            {
+                string name = restaurants.FirstOrDefault(x => x.RestaurantId == r.RestaurantId)?.RestaurantName ?? r.RestaurantId;
+                Console.WriteLine($"- {name} ({r.RestaurantId}): ${r.Revenue:0.00}");
+            }
+        }
+
+        // Most ordered items (by quantity)
+        var topItems = orders
+            .SelectMany(o => o.Items)
+            .GroupBy(i => i.FoodItem.ItemName)
+            .Select(g => new { ItemName = g.Key, Qty = g.Sum(x => x.Quantity) })
+            .OrderByDescending(x => x.Qty)
+            .Take(5)
+            .ToList();
+
+        Console.WriteLine("\nTop 5 Items (Total Qty):");
+        if (topItems.Count == 0)
+        {
+            Console.WriteLine("- (none)");
+        }
+        else
+        {
+            foreach (var it in topItems)
+                Console.WriteLine($"- {it.ItemName}: {it.Qty}");
+        }
+    }
+
 
     // ---------------- EXIT SAVE ----------------
 
